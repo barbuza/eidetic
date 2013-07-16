@@ -69,6 +69,9 @@ defmodule EideticTest do
       is_admin = id === 500
       User.new! id: id, name: name, email: email, is_admin: is_admin
     end
+    assert_raise User.NotFound, fn ->
+      IO.inspect User.get! 1001
+    end
     assert User[id: 10, name: "spam", email: "spam@gmail.com", is_admin: false] === User.get(10)
     assert [User[id: 500, name: "foo", email: "foo@gmail.com", is_admin: true]] === User.find(User.match_spec.is_admin(true))
     assert 250 === length(User.find User.match_spec.name("eggs"))

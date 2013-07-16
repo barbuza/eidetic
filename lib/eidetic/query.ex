@@ -40,9 +40,9 @@ defmodule Eidetic.Query do
 
       def get!(value) do
         case get(value) do
-          [item] -> item
-          []     ->
+          nil  ->
             raise unquote(name).NotFound[message: "#{unquote(name)} with #{unquote(pkey)} = #{inspect value} not found"]
+          item -> item
         end
       end
 
