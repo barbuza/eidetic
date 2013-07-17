@@ -32,7 +32,7 @@ currently, only `non_empty_string/1` is custom validator available
     User.Meta.create!
 
 # create records
-`create!` will check if not other records stored with given pkey value
+`create!` and `new!` will check if no other records stored with given pkey value
 
     User.new! id: 1, name: "foo", email: "foo@gmail.com"
     User[id: 2, name: "spam", email: "spam@me.com", is_admin: true].create!
@@ -44,7 +44,7 @@ eidetic will try to utilize first specified index in match spec
     User.find User.match_spec.is_admin(true)
 
 #alter data
-`change_#{pkey}!` will check if not record is stored for new given value
+`change_#{pkey}!` will check if no record is stored for a pk given value
 
 `save!` will just invoke `:mnesia.write` with no uniq checks
 
