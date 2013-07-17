@@ -11,6 +11,7 @@ defmodule Eidetic do
       use Eidetic.Query
       use Eidetic.Validations
       use Eidetic.Update
+      use Eidetic.Enumerable
     end
   end
 

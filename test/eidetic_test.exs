@@ -20,6 +20,18 @@ end
 defmodule EideticTest do
   use ExUnit.Case
 
+  defp create_test_users do
+    names = %w(foo bar spam eggs)
+    hosts = %w(gmail.com me.com)
+    Enum.each 1..1000, fn (id) ->
+      name = Enum.at names, rem(id, 4)
+      host = Enum.at hosts, rem(id, 2)
+      email = name <> "@" <> host
+      is_admin = id === 500
+      User.new! id: id, name: name, email: email, is_admin: is_admin
+    end
+  end
+
   setup do
     :application.start :mnesia
     User.Meta.create!
@@ -60,15 +72,7 @@ defmodule EideticTest do
   end
 
   test "queries" do
-    names = %w(foo bar spam eggs)
-    hosts = %w(gmail.com me.com)
-    Enum.each 1..1000, fn (id) ->
-      name = Enum.at names, rem(id, 4)
-      host = Enum.at hosts, rem(id, 2)
-      email = name <> "@" <> host
-      is_admin = id === 500
-      User.new! id: id, name: name, email: email, is_admin: is_admin
-    end
+    create_test_users
     assert_raise User.NotFound, fn ->
       IO.inspect User.get! 1001
     end
@@ -92,5 +96,13 @@ defmodule EideticTest do
       user = User.get 1
       user.change_id! 2
     end
+  end
+
+  test "enum" do
+    create_test_users
+    assert Enum.reduce(User.enum, 0, fn (_, count) -> count + 1 end) === 1000
+    assert Enum.count(User.enum) === 1000
+    assert Enum.member?(User.enum, User[id: 1]) === false
+    assert Enum.member?(User.enum, User.get(1)) === true
   end
 end
