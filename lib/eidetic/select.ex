@@ -60,10 +60,11 @@ defmodule Eidetic.Select do
 
     select_head = Enum.with_index(fields) |>
                   Enum.reduce([name], fn ({_, index}, head) ->
-                    head ++ [:"$#{index + 1}"]
+                    [:"$#{index + 1}" | head]
                   end) |>
-                  list_to_tuple
-                  |> Macro.escape
+                  :lists.reverse |>
+                  list_to_tuple |>
+                  Macro.escape
 
     quote location: :keep do
 
