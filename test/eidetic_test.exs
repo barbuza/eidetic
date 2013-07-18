@@ -1,4 +1,5 @@
 Code.require_file "test_helper.exs", __DIR__
+:application.start :mnesia
 
 defrecord User, [id: nil, name: nil, email: nil, is_admin: false] do
   use Eidetic
@@ -34,13 +35,11 @@ defmodule EideticTest do
   end
 
   setup do
-    :application.start :mnesia
     User.Meta.create!
   end
 
   teardown do
     User.Meta.delete!
-    :application.stop :mnesia
   end
 
   test "validations" do
