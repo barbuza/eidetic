@@ -3,6 +3,7 @@ defmodule Eidetic.Select do
   Module.register_attribute __MODULE__, :select_op, accumulate: true
   Module.register_attribute __MODULE__, :select_op_sub, accumulate: true
 
+
   @select_op :is_atom
   @select_op :is_float
   @select_op :is_integer
@@ -38,6 +39,7 @@ defmodule Eidetic.Select do
   @select_op :<
   @select_op :>=
 
+
   @select_op_sub {:"==", :"=:="}
   @select_op_sub {:"===", :"=:="}
   @select_op_sub {:"!=", :"=/="}
@@ -52,6 +54,7 @@ defmodule Eidetic.Select do
       @before_compile unquote(__MODULE__)
     end
   end
+
 
   defmacro __before_compile__(env) do
 
@@ -84,45 +87,60 @@ defmodule Eidetic.Select do
   def prepare_select(env, table_info, what, code) do
 
     select_head = Enum.with_index(table_info.fields) |>
-              Enum.reduce([table_info.name], fn ({_, index}, head) ->
-                [:"$#{index + 1}" | head]
-              end) |>
-              :lists.reverse |>
-              list_to_tuple |>
-              Macro.escape
+                    Enum.reduce([table_info.name], fn ({_, index}, head) ->
+                      [:"$#{index + 1}" | head]
+                    end) |> :lists.reverse |> list_to_tuple |> Macro.escape
 
-    query = Macro.expand_all (prepare_query code), env
-    if is_match_spec? query do
-      match_spec = query_to_matchspec table_info, query
+    query = prepare_query(code) |> Macro.expand_all(env)
+
+    field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
+
+    if is_match_spec_macro? query do
+      IO.puts "perform macro find for #{Macro.to_string query}"
+      match_spec = query_to_matchspec(table_info, query) |> Macro.escape
       if what === :"$_"do
         quote do
-          unquote(table_info.name).find(unquote(Macro.escape match_spec))
+          unquote(table_info.name).find(unquote(match_spec))
         end
       else
-        field_pos_to_idx = fields_to_positions_list table_info.fields
         return_idx = Keyword.get(field_pos_to_idx, what)
         quote do
-          Enum.map unquote(table_info.name).find(unquote(Macro.escape match_spec)), elem(&1, unquote(return_idx))
+          unquote(table_info.name).find(unquote(match_spec)) |> Enum.map(elem(&1, unquote(return_idx)))
         end
       end
     else
-      quote do
-        :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
+      if what === :"$_" do
+        quote do
+          if Eidetic.Select.is_match_spec?(unquote(query)) do
+            match_spec = Eidetic.Select.query_to_matchspec(unquote(Macro.escape table_info), unquote(query))
+            unquote(table_info.name).find(match_spec)
+          else
+            :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
+          end
+        end
+      else
+        quote do
+          if Eidetic.Select.is_match_spec?(unquote(query)) do
+            match_spec = Eidetic.Select.query_to_matchspec(unquote(Macro.escape table_info), unquote(query))
+            return_idx = Keyword.get(unquote(Macro.escape field_pos_to_idx), unquote(what))
+            unquote(table_info.name).find(match_spec) |> Enum.map(elem(&1, return_idx))
+          else
+            :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
+          end
+        end
       end
     end
   end
 
-  def prepare_query(code) do
-    query = transform code
-    List.flatten [query]
+  defp prepare_query(code) do
+    List.flatten [transform(code)]
   end
 
-
-  def transform({:__block__, _, exprs}) do
-    Enum.map exprs, transform(&1)
+  defp transform({:__block__, _, exprs}) do
+    Enum.map(exprs, transform(&1)) |> List.flatten
   end
 
-  def transform({name, loc, args}) when is_list(loc) and is_list(args) and is_atom(name) do
+  defp transform({name, loc, args}) when is_list(loc) and is_list(args) and is_atom(name) do
     cond do
       Keyword.has_key?(@select_op_sub, name) ->
         quote do
@@ -137,24 +155,40 @@ defmodule Eidetic.Select do
     end
   end
 
-  def transform(val), do: val
+  defp transform(val), do: val
+
+
+  def is_match_spec_macro?(query) when is_list(query) do
+    Enum.all?(query, is_match_spec_macro?(&1))
+  end
+
+  def is_match_spec_macro?({:andalso, [], args}) do
+    Enum.all? args, is_match_spec_macro?(&1)
+  end
+
+  def is_match_spec_macro?({:"{}", [], [:andalso, branch_a, branch_b]}) do
+    is_match_spec_macro?(branch_a) and is_match_spec_macro?(branch_b)
+  end
+
+  def is_match_spec_macro?({:"{}", [], [:"=:=", field, value]})
+  when is_atom(field) and (is_binary(value) or is_list(value) or is_number(value) or is_atom(value)) do
+    true
+  end
+
+  def is_match_spec_macro?(_), do: false
 
 
   def is_match_spec?(query) when is_list(query) do
     Enum.all?(query, is_match_spec?(&1))
   end
 
-  def is_match_spec?({:andalso, [], args}) do
-    Enum.all? args, is_match_spec?(&1)
-  end
-
-  def is_match_spec?({:"{}", [], [:andalso, branch_a, branch_b]}) do
-    is_match_spec?(branch_a) and is_match_spec?(branch_b)
-  end
-
-  def is_match_spec?({:"{}", [], [:"=:=", field, value]})
+  def is_match_spec?({:"=:=", field, value})
   when is_atom(field) and (is_binary(value) or is_list(value) or is_number(value) or is_atom(value)) do
     true
+  end
+
+  def is_match_spec?({:andalso, branch_a, branch_b}) do
+    is_match_spec?(branch_a) and is_match_spec?(branch_b)
   end
 
   def is_match_spec?(_), do: false
@@ -168,10 +202,17 @@ defmodule Eidetic.Select do
     [{field, value}]
   end
 
+  def collect_equality_matches({:"=:=", field, value}) do
+    [{field, value}]
+  end
+
   def collect_equality_matches({:"{}", [], [:andalso, branch_a, branch_b]}) do
     [collect_equality_matches(branch_a), collect_equality_matches(branch_b)]
   end
 
+  def collect_equality_matches({:andalso, branch_a, branch_b}) do
+    [collect_equality_matches(branch_a), collect_equality_matches(branch_b)]
+  end
 
   def fields_to_positions_list(fields) do
     Enum.with_index(fields) |>
