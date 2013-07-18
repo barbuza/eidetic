@@ -38,10 +38,9 @@ defmodule Eidetic.Select do
   @select_op :>
   @select_op :<
   @select_op :>=
+  @select_op :==
 
-
-  @select_op_sub {:"==", :"=:="}
-  @select_op_sub {:"===", :"=:="}
+  @select_op_sub {:"===", :"=="}
   @select_op_sub {:"!=", :"=/="}
   @select_op_sub {:"!==", :"=/="}
   @select_op_sub {:<=, :"=<"}
@@ -91,127 +90,112 @@ defmodule Eidetic.Select do
                       [:"$#{index + 1}" | head]
                     end) |> :lists.reverse |> list_to_tuple |> Macro.escape
 
-    query = prepare_query(code) |> Macro.expand_all(env)
+    query = [transform(Macro.expand_all(code, env), true)] |> List.flatten
 
-    field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
-
-    if is_match_spec_macro? query do
-      match_spec = query_to_matchspec(table_info, query) |> Macro.escape
+    if is_match_spec(query) do
+      match_spec = query_to_matchspec(table_info, query)
       if what === :"$_"do
         quote do
           unquote(table_info.name).find(unquote(match_spec))
         end
       else
+        field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
         return_idx = Keyword.get(field_pos_to_idx, what)
         quote do
           unquote(table_info.name).find(unquote(match_spec)) |> Enum.map(elem(&1, unquote(return_idx)))
         end
       end
     else
-      if what === :"$_" do
-        quote do
-          if Eidetic.Select.is_match_spec?(unquote(query)) do
-            match_spec = Eidetic.Select.query_to_matchspec(unquote(Macro.escape table_info), unquote(query))
-            unquote(table_info.name).find(match_spec)
-          else
-            :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
-          end
-        end
-      else
-        quote do
-          if Eidetic.Select.is_match_spec?(unquote(query)) do
-            match_spec = Eidetic.Select.query_to_matchspec(unquote(Macro.escape table_info), unquote(query))
-            return_idx = Keyword.get(unquote(Macro.escape field_pos_to_idx), unquote(what))
-            unquote(table_info.name).find(match_spec) |> Enum.map(elem(&1, return_idx))
-          else
-            :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
-          end
-        end
+      quote do
+        :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
       end
     end
   end
 
-  defp prepare_query(code) do
-    List.flatten [transform(code)]
+
+  defp transform({:__block__, _, exprs}, _) do
+    Enum.map(exprs, transform(&1, true)) |> List.flatten
   end
 
-  defp transform({:__block__, _, exprs}) do
-    Enum.map(exprs, transform(&1)) |> List.flatten
-  end
-
-  defp transform({name, loc, args}) when is_list(loc) and is_list(args) and is_atom(name) do
-    cond do
-      Keyword.has_key?(@select_op_sub, name) ->
-        quote do
-          {unquote_splicing([Keyword.get(@select_op_sub, name) | Enum.map(args, transform(&1))])}
-        end
-      Enum.member?(@select_op, name) ->
-        quote do
-          {unquote_splicing([name | Enum.map(args, transform(&1))])}
-        end
-      true ->
-        {name, loc, args}
+  defp transform({name, loc, args}, toplevel) when is_list(loc) and is_list(args) and is_atom(name) do
+    if has_variable_reference(args) do
+      cond do
+        Keyword.has_key?(@select_op_sub, name) ->
+          quote do
+            {unquote_splicing([Keyword.get(@select_op_sub, name) | Enum.map(args, transform(&1, false))])}
+          end
+        Enum.member?(@select_op, name) ->
+          quote do
+            {unquote_splicing([name | Enum.map(args, transform(&1, false))])}
+          end
+        true ->
+          raise "`#{Macro.to_string({name, loc, args})}` not allowed in query"
+      end
+    else
+      if toplevel, do: raise "`#{Macro.to_string({name, loc, args})}` not allowed in query"
+      {name, loc, args}
     end
   end
 
-  defp transform(val), do: val
+  defp transform(val, _), do: val
 
 
-  def is_match_spec_macro?(query) when is_list(query) do
-    Enum.all?(query, is_match_spec_macro?(&1))
+  def is_variable_reference(arg) when is_atom(arg) do
+    Regex.match? %r/^\$\d+$/, to_binary(arg)
   end
 
-  def is_match_spec_macro?({:andalso, [], args}) do
-    Enum.all? args, is_match_spec_macro?(&1)
+  def is_variable_reference(_), do: false
+
+
+  def has_variable_reference(arg) when is_list(arg) do
+    Enum.any? arg, function(has_variable_reference/1)
   end
 
-  def is_match_spec_macro?({:"{}", [], [:andalso, branch_a, branch_b]}) do
-    is_match_spec_macro?(branch_a) and is_match_spec_macro?(branch_b)
+  def has_variable_reference(arg) when is_atom(arg) do
+    is_variable_reference(arg)
   end
 
-  def is_match_spec_macro?({:"{}", [], [:"=:=", field, value]})
-  when is_atom(field) and (is_binary(value) or is_list(value) or is_number(value) or is_atom(value)) do
-    true
+  def has_variable_reference({name, loc, args}) when is_atom(name) and is_list(loc) do
+    has_variable_reference(args)
   end
 
-  def is_match_spec_macro?(_), do: false
+  def has_variable_reference(_), do: false
 
 
-  def is_match_spec?(query) when is_list(query) do
-    Enum.all?(query, is_match_spec?(&1))
+  def is_match_spec(query) when is_list(query) do
+    Enum.all? query, function(is_match_spec/1)
   end
 
-  def is_match_spec?({:"=:=", field, value})
-  when is_atom(field) and (is_binary(value) or is_list(value) or is_number(value) or is_atom(value)) do
-    true
+  def is_match_spec({:"{}", [], [:==, left, right]}) do
+    cond do
+      is_variable_reference(left) and not has_variable_reference(right) -> true
+      is_variable_reference(right) and not has_variable_reference(left) -> true
+      true -> false
+    end
   end
 
-  def is_match_spec?({:andalso, branch_a, branch_b}) do
-    is_match_spec?(branch_a) and is_match_spec?(branch_b)
+  def is_match_spec({:"{}", [], [:andalso, branch_a, branch_b]}) do
+    is_match_spec(branch_a) and is_match_spec(branch_b)
   end
 
-  def is_match_spec?(_), do: false
+  def is_match_spec(_), do: false
 
 
   def collect_equality_matches(query) when is_list(query) do
-    List.flatten Enum.map(query, collect_equality_matches(&1))
+    Enum.map(query, collect_equality_matches(&1)) |> List.flatten
   end
 
-  def collect_equality_matches({:"{}", [], [:"=:=", field, value]}) do
-    [{field, value}]
-  end
-
-  def collect_equality_matches({:"=:=", field, value}) do
-    [{field, value}]
+  def collect_equality_matches({:"{}", [], [:==, left, right]}) do
+    cond do
+      is_variable_reference(left) -> [{left, right}]
+      is_variable_reference(right) -> [{right, left}]
+    end
   end
 
   def collect_equality_matches({:"{}", [], [:andalso, branch_a, branch_b]}) do
     [collect_equality_matches(branch_a), collect_equality_matches(branch_b)]
   end
 
-  def collect_equality_matches({:andalso, branch_a, branch_b}) do
-    [collect_equality_matches(branch_a), collect_equality_matches(branch_b)]
-  end
 
   def fields_to_positions_list(fields) do
     Enum.with_index(fields) |>
@@ -223,9 +207,12 @@ defmodule Eidetic.Select do
 
   def query_to_matchspec(Eidetic.TableInfo[name: name, fields: fields], query) do
     field_pos_to_idx = fields_to_positions_list fields
-    Enum.reduce collect_equality_matches(query), name.match_spec, fn ({pos, value}, match_spec) ->
+    spec = Enum.reduce(collect_equality_matches(query), name.match_spec, fn ({pos, value}, match_spec) ->
       idx = Keyword.get(field_pos_to_idx, pos)
       set_elem(match_spec, idx, value)
+    end)
+    quote do
+      {unquote_splicing(tuple_to_list(spec))}
     end
   end
 

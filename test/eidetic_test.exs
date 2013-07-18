@@ -1,11 +1,14 @@
 Code.require_file "test_helper.exs", __DIR__
 :application.start :mnesia
 
-defrecord User, [id: nil, name: nil, email: nil, is_admin: false] do
+
+defrecord User, [id: nil, name: nil, email: nil, is_admin: false, perms: []] do
   use Eidetic
 
   @index_on :is_admin
   @storage :memory
+
+  validate_with :perms, function(is_list/1)
 
   validate_with :id, function(is_integer/1)
 
@@ -58,7 +61,7 @@ defmodule EideticTest do
   end
 
   test "meta" do
-    assert [:id, :name, :email, :is_admin] === User.Meta.fields
+    assert [:id, :name, :email, :is_admin, :perms] === User.Meta.fields
     assert [:is_admin] === User.Meta.indicies
     assert :memory === User.Meta.storage
     assert_raise User.TableAlreadyExists, fn ->
@@ -108,21 +111,31 @@ defmodule EideticTest do
 
   test "select" do
     create_test_users
-    res1 = User.select User.id do
+
+    assert [10, 20] === Enum.sort(User.select User.id do
       (User.id == 10) or (User.id == 20)
-    end
-    assert [10, 20] === Enum.sort(res1)
-    res2 = User.select do
+    end)
+
+    res = User.select do
       User.id < 50
       User.email == "foo@gmail.com"
     end
-    assert Enum.map(1..12, &1 * 4) == Enum.map(Enum.sort(res2), fn (user) -> user.id end)
+    assert Enum.map(1..12, &1 * 4) == Enum.map(Enum.sort(res), elem(&1, 1))
+    
     assert [1] == (User.select User.id do
       User.id == 1
       User.is_admin == false
     end)
-    assert [] == (User.select do
-      User.id == 1 and User.is_admin == true
+
+    id = 10
+    assert [User.get(10)] == (User.select do
+      hd([id]) == User.id
     end)
+
+    User.get(30).perms([:editor]).save!
+    assert [User.get(10), User.get(30)] == Enum.sort(User.select do
+      User.id == hd([id]) or hd(User.perms) == :editor
+    end)
+
   end
 end
