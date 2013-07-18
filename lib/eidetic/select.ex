@@ -1,5 +1,9 @@
 defmodule Eidetic.Select do
 
+  defexception QueryError, [:code, :line] do
+    def message(err), do: "`#{Macro.to_string(err.code)}` not allowed in Eidetic#select"  
+  end
+
   Module.register_attribute __MODULE__, :select_op, accumulate: true
   Module.register_attribute __MODULE__, :select_op_sub, accumulate: true
 
@@ -90,26 +94,34 @@ defmodule Eidetic.Select do
                       [:"$#{index + 1}" | head]
                     end) |> :lists.reverse |> list_to_tuple |> Macro.escape
 
-    query = [transform(Macro.expand_all(code, env), true)] |> List.flatten
+    try do
 
-    if is_match_spec(query) do
-      match_spec = query_to_matchspec(table_info, query)
-      if what === :"$_"do
-        quote do
-          unquote(table_info.name).find(unquote(match_spec))
+      query = [transform(Macro.expand_all(code, env), true)] |> List.flatten
+
+      if is_match_spec(query) do
+        match_spec = query_to_matchspec(table_info, query)
+        if what === :"$_"do
+          quote do
+            unquote(table_info.name).find(unquote(match_spec))
+          end
+        else
+          field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
+          return_idx = Keyword.get(field_pos_to_idx, what)
+          quote do
+            unquote(table_info.name).find(unquote(match_spec)) |> Enum.map(elem(&1, unquote(return_idx)))
+          end
         end
       else
-        field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
-        return_idx = Keyword.get(field_pos_to_idx, what)
         quote do
-          unquote(table_info.name).find(unquote(match_spec)) |> Enum.map(elem(&1, unquote(return_idx)))
+          :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
         end
       end
-    else
-      quote do
-        :mnesia.dirty_select unquote(table_info.name), [{unquote(select_head), unquote(query), [unquote(what)]}]
-      end
+
+    rescue
+      err in [QueryError] ->
+        raise CompileError[description: err.message, line: err.line, file: env.file]
     end
+
   end
 
 
@@ -129,10 +141,12 @@ defmodule Eidetic.Select do
             {unquote_splicing([name | Enum.map(args, transform(&1, false))])}
           end
         true ->
-          raise "`#{Macro.to_string({name, loc, args})}` not allowed in query"
+          raise QueryError[code: {name, loc, args}, line: Keyword.get(loc, :line, :undef)]
       end
     else
-      if toplevel, do: raise "`#{Macro.to_string({name, loc, args})}` not allowed in query"
+      if toplevel do
+        raise QueryError[code: {name, loc, args}, line: Keyword.get(loc, :line, :undef)]
+      end
       {name, loc, args}
     end
   end
