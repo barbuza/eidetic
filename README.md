@@ -2,7 +2,7 @@
 
 alternate mnesia interface for `elixir`
 
-# define
+### define
 valid storage types are `memory`, `disk` and `memory_and_disk`
 
 `validate` exposes value as field name
@@ -28,22 +28,22 @@ currently, only `non_empty_string/1` is custom validator available
     end
 
 
-# create schema
+### create schema
     User.Meta.create!
 
-# create records
+### create records
 `create!` and `new!` will check if no other records stored with given pkey value
 
     User.new! id: 1, name: "foo", email: "foo@gmail.com"
     User[id: 2, name: "spam", email: "spam@me.com", is_admin: true].create!
 
-# make queries
+### make queries
 eidetic will try to utilize first specified index in match spec
 
     User.get 1
     User.find User.match_spec.is_admin(true)
 
-#alter data
+###alter data
 `change_#{pkey}!` will check if no record is stored for a pk given value
 
 `save!` will just invoke `:mnesia.write` with no uniq checks
@@ -54,7 +54,7 @@ eidetic will try to utilize first specified index in match spec
 
 all save / update methods will run validation before altering database
 
-#use `:mnesia.select` with no pain in the ass
+###use `:mnesia.select` with no pain in the ass
 
     User.select do
       (User.id == 10) or (User.id == 20)
