@@ -121,7 +121,7 @@ defmodule EideticTest do
       User.id == 1
       User.is_admin == false
     end)
-    assert [] == (User.select User.id do
+    assert [] == (User.select do
       User.id == 1 and User.is_admin == true
     end)
   end
