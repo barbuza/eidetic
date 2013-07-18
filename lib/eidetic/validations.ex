@@ -46,12 +46,16 @@ defmodule Eidetic.Validations do
         true
       end
 
+      def validate_field!(field, value) do
+        if not validate_field(field, value) do
+          raise unquote(:"#{name}.ValidationError")[field: field, value: value]
+        end
+      end
+
       def validate!(value) do
         Enum.each unquote(Enum.with_index(fields)), fn ({field, index}) ->
           field_value = elem(value, index + 1)
-          if not validate_field(field, field_value) do
-            raise unquote(:"#{name}.ValidationError")[field: field, value: field_value]
-          end
+          validate_field! field, field_value
         end 
       end
 

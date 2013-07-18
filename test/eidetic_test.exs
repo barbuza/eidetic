@@ -104,6 +104,9 @@ defmodule EideticTest do
       user = User.get 1
       user.change_id! 2
     end
+    assert_raise User.ValidationError, ":invalid is not valid value for id", fn ->
+      User.get(1).change_id! :invalid
+    end
   end
 
   test "enum" do

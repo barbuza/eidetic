@@ -11,9 +11,9 @@ defmodule Eidetic.Update do
     quote location: :keep do
 
       def unquote(:"change_#{pkey}!")(pk, value) do
+        unquote(name).validate_field! unquote(pkey), pk
+        value.validate!
         {:atomic, result} = :mnesia.transaction fn ->
-          value.validate!
-          set_elem(value, 1, pk).validate!
           case :mnesia.read({unquote(name), pk}) do
             [_] ->
               unquote(name).NonUniq[message: "#{unquote(name)} with #{unquote(pkey)} = #{inspect pk} already exists"]

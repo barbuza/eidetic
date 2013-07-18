@@ -46,15 +46,16 @@ eidetic will try to utilize first specified index in match spec
     User.find User.match_spec.is_admin(true)
 
 ###alter data
-`change_#{pkey}!` will check if no record is stored for a pk given value
-
-`save!` will just invoke `:mnesia.write` with no uniq checks
 
     User.get(1).email("some_new_email@host.com").save!
     User.get(1).change_id!(2)
     User.get(2).delete!
 
-all save / update methods will run validation before altering database
+`change_#{pkey}!` will check if no record is stored for a pk given value
+
+`save!` will just invoke `:mnesia.write` with no uniq checks
+
+`new!`, `create!`, and `change_#{pkey}!` will also run validation before altering database
 
 ###use `:mnesia.select` with no pain in the ass
     require User
