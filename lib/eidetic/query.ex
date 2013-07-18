@@ -10,9 +10,7 @@ defmodule Eidetic.Query do
     Eidetic.TableInfo[name: name, fields: fields, pkey: pkey,
                       indicies: indicies] = Eidetic.TableInfo.for_module env.module
 
-    match_spec = Enum.reduce fields, {name}, fn (_, spec) ->
-      insert_elem(spec, 1, :_)
-    end
+    match_spec = list_to_tuple([name | :lists.duplicate(Enum.count(fields), :_)])
 
     fields_index = Enum.with_index fields
 

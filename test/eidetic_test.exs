@@ -19,6 +19,7 @@ end
 
 defmodule EideticTest do
   use ExUnit.Case
+  require User
 
   defp create_test_users do
     names = %w(foo bar spam eggs)
@@ -104,5 +105,18 @@ defmodule EideticTest do
     assert Enum.count(User.enum) === 1000
     assert Enum.member?(User.enum, User[id: 1]) === false
     assert Enum.member?(User.enum, User.get(1)) === true
+  end
+
+  test "select" do
+    create_test_users
+    res1 = User.select User.id do
+      (User.id == 10) or (User.id == 20)
+    end
+    assert [10, 20] === Enum.sort(res1)
+    res2 = User.select do
+      User.id < 50
+      User.email == "foo@gmail.com"
+    end
+    assert Enum.map(1..12, &1 * 4) == Enum.map(Enum.sort(res2), fn (user) -> user.id end)
   end
 end

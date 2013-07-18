@@ -12,6 +12,7 @@ defmodule Eidetic do
       use Eidetic.Validations
       use Eidetic.Update
       use Eidetic.Enumerable
+      use Eidetic.Select
     end
   end
 
