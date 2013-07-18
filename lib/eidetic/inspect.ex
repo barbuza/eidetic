@@ -14,11 +14,15 @@ defmodule Eidetic.Inspect do
       defimpl Inspect, for: unquote(name) do
         import Inspect.Algebra
 
-        def inspect(val, opts) do
-          fields = Enum.map(Enum.with_index(unquote(fields)), fn ({field, index}) ->
-            ["#{field}: ", Kernel.inspect(elem(val, index + 1), opts)] ++ if index == length(unquote(fields)) - 1 do [] else [", "] end
-          end) |> List.concat |> concat
-          concat ["##{unquote(shortname)}<[", fields ,"]>"]
+        def inspect(val, opts // []) do
+          if size(val) === length(unquote(fields)) + 1 do
+            fields = Enum.map(Enum.with_index(unquote(fields)), fn ({field, index}) ->
+              ["#{field}: ", Kernel.inspect(elem(val, index + 1), opts)] ++ if index == length(unquote(fields)) - 1 do [] else [", "] end
+            end) |> List.concat |> concat
+            concat ["##{unquote(shortname)}<[", fields ,"]>"]
+          else
+            Kernel.inspect val, opts.raw(true)
+          end
         end
       end
 

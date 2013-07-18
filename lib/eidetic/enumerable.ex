@@ -38,8 +38,12 @@ defmodule Eidetic.Enumerable do
 
       defimpl Inspect, for: unquote(proxy_name) do
 
-        def inspect(val, opts) do
-          "##{unquote(shortname)}.Enumerable"
+        def inspect(val, opts // []) do
+          if size(val) == 2 do
+            "##{unquote(shortname)}.Enumerable"
+          else
+            Kernel.inspect val, opts.raw(true)
+          end
         end
 
       end
