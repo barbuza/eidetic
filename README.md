@@ -11,8 +11,10 @@ currently, only `non_empty_string/1` is custom validator available
 
 `validate_presence_of` will check if `value !== nil`
 
-    defrecord User, [id: nil, name: nil, email: nil, is_admin: false] do
+    defrecord User, [id: nil, name: nil, email: nil, is_admin: false, perms: []] do
       use Eidetic
+
+      validate_with :perms, function(is_list/1)
 
       @index_on :is_admin
       @storage :memory
@@ -55,6 +57,7 @@ eidetic will try to utilize first specified index in match spec
 all save / update methods will run validation before altering database
 
 ###use `:mnesia.select` with no pain in the ass
+    require User
 
     User.select do
       (User.id == 10) or (User.id == 20)
@@ -63,6 +66,10 @@ all save / update methods will run validation before altering database
     User.select User.id do
       User.is_admin == true
       User.id < 1000
+    end
+
+    User.select do
+      hd(User.perms) == :editor
     end
 
 look at `lib/eidetic/select.ex` for list of functions / operators available
