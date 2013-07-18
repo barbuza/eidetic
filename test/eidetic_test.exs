@@ -45,6 +45,11 @@ defmodule EideticTest do
     User.Meta.delete!
   end
 
+  test "inspect" do
+    assert inspect(User[]) === "#User<[id: nil, name: nil, email: nil, is_admin: false, perms: []]>"
+    assert inspect(User.enum) === "#User.Enumerable"
+  end
+
   test "validations" do
     assert_raise User.ValidationError, "nil is not valid value for id", fn ->
       User.new! []

@@ -13,6 +13,7 @@ defmodule Eidetic do
       use Eidetic.Update
       use Eidetic.Enumerable
       use Eidetic.Select
+      use Eidetic.Inspect
     end
   end
 

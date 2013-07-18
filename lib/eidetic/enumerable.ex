@@ -7,13 +7,17 @@ defmodule Eidetic.Enumerable do
   end
 
   defmacro __before_compile__(env) do
-    Eidetic.TableInfo[name: name, fields: fields] = Eidetic.TableInfo.for_module env.module
-    enum = Macro.escape list_to_tuple([name | :lists.duplicate(Enum.count(fields), :__enum)])
+    Eidetic.TableInfo[name: name] = Eidetic.TableInfo.for_module env.module
+    proxy_name = binary_to_atom(to_binary(name) <> ".EnumProxy")
+    shortname = Regex.replace %r/^Elixir\./, to_binary(name), ""
+    enum = {proxy_name, nil}
     quote do
+
+      defrecord EnumProxy, [:dummy]
 
       def enum, do: unquote(enum)
 
-      defimpl Enumerable, for: unquote(name) do
+      defimpl Enumerable, for: unquote(proxy_name) do
 
         def count(unquote(enum)) do
           :mnesia.table_info unquote(name), :size
@@ -31,6 +35,15 @@ defmodule Eidetic.Enumerable do
         end
 
       end
+
+      defimpl Inspect, for: unquote(proxy_name) do
+
+        def inspect(val, opts) do
+          "##{unquote(shortname)}.Enumerable"
+        end
+
+      end
+
     end
   end
 end
