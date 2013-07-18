@@ -1,6 +1,7 @@
-# Eidetic /aɪˈdɛtɪk/
+# Eidetic /aɪˈdɛtɪk/ [![Build Status](https://travis-ci.org/barbuza/eidetic.png)](https://travis-ci.org/barbuza/eidetic)
 
 alternate mnesia interface for `elixir`
+
 
 ### define
 valid storage types are `memory`, `disk` and `memory_and_disk`
