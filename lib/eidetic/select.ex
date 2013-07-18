@@ -96,7 +96,6 @@ defmodule Eidetic.Select do
     field_pos_to_idx = Eidetic.Select.fields_to_positions_list table_info.fields
 
     if is_match_spec_macro? query do
-      IO.puts "perform macro find for #{Macro.to_string query}"
       match_spec = query_to_matchspec(table_info, query) |> Macro.escape
       if what === :"$_"do
         quote do
