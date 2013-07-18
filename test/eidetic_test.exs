@@ -117,5 +117,12 @@ defmodule EideticTest do
       User.email == "foo@gmail.com"
     end
     assert Enum.map(1..12, &1 * 4) == Enum.map(Enum.sort(res2), fn (user) -> user.id end)
+    assert [1] == (User.select User.id do
+      User.id == 1
+      User.is_admin == false
+    end)
+    assert [] == (User.select User.id do
+      User.id == 1 and User.is_admin == true
+    end)
   end
 end

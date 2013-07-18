@@ -56,7 +56,8 @@ defmodule Eidetic.Select do
 
   defmacro __before_compile__(env) do
 
-    Eidetic.TableInfo[name: name, fields: fields] = Eidetic.TableInfo.for_module env.module
+    table_info = Eidetic.TableInfo.for_module env.module
+    Eidetic.TableInfo[name: name, fields: fields] = table_info
 
     select_head = Enum.with_index(fields) |>
                   Enum.reduce([name], fn ({_, index}, head) ->
@@ -69,7 +70,7 @@ defmodule Eidetic.Select do
     quote location: :keep do
 
       defmacro select(what, [do: code]) do
-        __select_prepare_select __CALLER__, what, code
+        __select_prepare_select __CALLER__, Macro.expand_all(what, __CALLER__), code
       end
 
       defmacro select([do: code]) do
@@ -77,13 +78,27 @@ defmodule Eidetic.Select do
       end
 
       defp __select_prepare_select(env, what, code) do
-        query = __select_prepare_query code
+        query = Macro.expand_all (__select_prepare_query code), env
         select_head = unquote(Macro.escape select_head)
         name = unquote(name)
-        res = quote do
-          :mnesia.dirty_select unquote(name), [{unquote(select_head), unquote(query), [unquote(what)]}]
+        if Eidetic.Select.is_match_spec? query do
+          match_spec = Eidetic.Select.query_to_matchspec unquote(Macro.escape table_info), query
+          if what === :"$_"do
+            quote do
+              unquote(name).find(unquote(Macro.escape match_spec))
+            end
+          else
+            field_pos_to_idx = Eidetic.Select.fields_to_positions_list unquote(fields)
+            return_idx = Keyword.get(field_pos_to_idx, what)
+            quote do
+              Enum.map unquote(name).find(unquote(Macro.escape match_spec)), elem(&1, unquote(return_idx))
+            end
+          end
+        else
+          quote do
+            :mnesia.dirty_select unquote(name), [{unquote(select_head), unquote(query), [unquote(what)]}]
+          end
         end
-        Macro.expand_all res, env
       end
 
       defp __select_prepare_query(code) do
@@ -124,4 +139,52 @@ defmodule Eidetic.Select do
 
     end
   end
+
+
+  def is_match_spec?(query) when is_list(query) do
+    Enum.all?(query, is_match_spec?(&1))
+  end
+
+  def is_match_spec?({:andalso, [], args}) do
+    Enum.all? args, is_match_spec?(&1)
+  end
+
+  def is_match_spec?({:"{}", [], [:andalso, branch_a, branch_b]}) do
+    is_match_spec?(branch_a) and is_match_spec?(branch_b)
+  end
+
+  def is_match_spec?({:"{}", [], [:"=:=", field, value]})
+  when is_atom(field) and (is_binary(value) or is_list(value) or is_number(value) or is_atom(value)) do
+    true
+  end
+
+  def is_match_spec?(_), do: false
+
+  def collect_equality_matches(query) when is_list(query) do
+    List.flatten Enum.map(query, collect_equality_matches(&1))
+  end
+
+  def collect_equality_matches({:"{}", [], [:"=:=", field, value]}) do
+    [{field, value}]
+  end
+
+  def collect_equality_matches({:"{}", [], [:andalso, branch_a, branch_b]}) do
+    [collect_equality_matches(branch_a), collect_equality_matches(branch_b)]
+  end
+
+  def fields_to_positions_list(fields) do
+    Enum.with_index(fields) |>
+      Enum.reduce([], fn ({_, index}, head) ->
+        [{:"$#{index + 1}", index + 1} | head]
+      end)
+  end
+
+  def query_to_matchspec(Eidetic.TableInfo[name: name, fields: fields], query) do
+    field_pos_to_idx = fields_to_positions_list fields
+    Enum.reduce collect_equality_matches(query), name.match_spec, fn ({pos, value}, match_spec) ->
+      idx = Keyword.get(field_pos_to_idx, pos)
+      set_elem(match_spec, idx, value)
+    end
+  end
+
 end

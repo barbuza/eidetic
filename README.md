@@ -66,3 +66,5 @@ all save / update methods will run validation before altering database
     end
 
 look at `lib/eidetic/select.ex` for list of functions / operators available
+
+`select` will try to use `find` if possible (if there are only equality checks)
