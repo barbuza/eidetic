@@ -4,45 +4,16 @@ defmodule Eidetic.Select do
     def message(err), do: "`#{Macro.to_string(err.code)}` not allowed in Eidetic#select"  
   end
 
-  Module.register_attribute __MODULE__, :select_op, accumulate: true
+  Module.register_attribute __MODULE__, :select_ops, accumulate: false
   Module.register_attribute __MODULE__, :select_op_sub, accumulate: true
 
 
-  @select_op :is_atom
-  @select_op :is_float
-  @select_op :is_integer
-  @select_op :is_list
-  @select_op :is_number
-  @select_op :is_pid
-  @select_op :is_port
-  @select_op :is_reference
-  @select_op :is_tuple
-  @select_op :is_binary
-  @select_op :is_function
-  @select_op :is_record
-  @select_op :abs
-  @select_op :element
-  @select_op :hd
-  @select_op :length
-  @select_op :round
-  @select_op :size
-  @select_op :tl
-  @select_op :trunc
-  @select_op :+
-  @select_op :-
-  @select_op :*
-  @select_op :div
-  @select_op :rem
-  @select_op :band
-  @select_op :bor
-  @select_op :bxor
-  @select_op :bnot
-  @select_op :bsl
-  @select_op :bsr
-  @select_op :>
-  @select_op :<
-  @select_op :>=
-  @select_op :==
+  @select_ops [:is_atom, :is_float, :is_integer, :is_list, :is_number, :is_pid,
+               :is_port, :is_reference, :is_tuple, :is_binary, :is_function,
+               :is_record, :abs, :element, :hd, :length, :round, :size, :tl,
+               :trunc, :+, :-, :*, :div, :rem, :band, :bor, :bxor, :bnot, :bsl,
+               :bsr, :>, :<, :>=, :==]
+
 
   @select_op_sub {:"===", :"=="}
   @select_op_sub {:"!=", :"=/="}
@@ -53,35 +24,27 @@ defmodule Eidetic.Select do
 
 
   defmacro __using__(_) do
-    quote do
-      @before_compile unquote(__MODULE__)
-    end
-  end
 
+      quote location: :keep do
 
-  defmacro __before_compile__(env) do
+        defmacro table_info, do: Macro.escape Eidetic.TableInfo.for_module __MODULE__
 
-    table_info = Eidetic.TableInfo.for_module env.module
-
-    quote location: :keep do
-
-      defmacro select(what, [do: code]) do
-        Eidetic.Select.prepare_select __CALLER__, unquote(Macro.escape table_info), Macro.expand_all(what, __CALLER__), code
-      end
-
-      defmacro select([do: code]) do
-        Eidetic.Select.prepare_select __CALLER__, unquote(Macro.escape table_info), :"$_", code
-      end
-
-      unquote_splicing(Enum.map Enum.with_index(table_info.fields), fn ({field, index}) ->
-
-        quote location: :keep do
-          defmacro unquote(field)() do
-            unquote(:"$#{index + 1}")
-          end
+        defmacro select(what, [do: code]) do
+          Eidetic.Select.prepare_select __CALLER__, table_info, Macro.expand_all(what, __CALLER__), code
         end
 
-      end)
+        defmacro select([do: code]) do
+          Eidetic.Select.prepare_select __CALLER__, table_info, :"$_", code
+        end
+
+        Enum.each Enum.with_index(@record_fields), fn ({{field, _}, index}) ->
+          fun = quote location: :keep do
+            defmacro unquote(field)() do
+              unquote(:"$#{index + 1}")
+            end
+          end
+          Module.eval_quoted(__ENV__, fun, [], [])
+        end
 
     end
   end
@@ -95,9 +58,7 @@ defmodule Eidetic.Select do
                     end) |> :lists.reverse |> list_to_tuple |> Macro.escape
 
     try do
-
       query = [transform(Macro.expand_all(code, env), true)] |> List.flatten
-
       if is_match_spec(query) do
         match_spec = query_to_matchspec(table_info, query)
         if what === :"$_"do
@@ -136,7 +97,7 @@ defmodule Eidetic.Select do
           quote do
             {unquote_splicing([Keyword.get(@select_op_sub, name) | Enum.map(args, transform(&1, false))])}
           end
-        Enum.member?(@select_op, name) ->
+        Enum.member?(@select_ops, name) ->
           quote do
             {unquote_splicing([name | Enum.map(args, transform(&1, false))])}
           end
@@ -220,14 +181,14 @@ defmodule Eidetic.Select do
 
 
   def query_to_matchspec(Eidetic.TableInfo[name: name, fields: fields], query) do
+    match_spec = list_to_tuple([name | :lists.duplicate(Enum.count(fields), :_)])
     field_pos_to_idx = fields_to_positions_list fields
-    spec = Enum.reduce(collect_equality_matches(query), name.match_spec, fn ({pos, value}, match_spec) ->
+    spec = Enum.reduce(collect_equality_matches(query), match_spec, fn ({pos, value}, mspec) ->
       idx = Keyword.get(field_pos_to_idx, pos)
-      set_elem(match_spec, idx, value)
+      set_elem(mspec, idx, value)
     end)
     quote do
       {unquote_splicing(tuple_to_list(spec))}
     end
   end
-
 end

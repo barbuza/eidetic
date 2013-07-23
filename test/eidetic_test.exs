@@ -18,6 +18,12 @@ defrecord User, [id: nil, name: nil, email: nil, is_admin: false, perms: []] do
 
   validate_presence_of :email
 
+  def admins do
+    select do
+      User.is_admin == true
+    end
+  end
+
 end
 
 
@@ -144,6 +150,8 @@ defmodule EideticTest do
     assert [User.get(10), User.get(30)] == Enum.sort(User.select do
       User.id == hd([id]) or hd(User.perms) == :editor
     end)
+
+    assert User.find(User.match_spec.is_admin(true)) == User.admins
 
   end
 end
