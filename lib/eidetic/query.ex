@@ -18,6 +18,23 @@ defmodule Eidetic.Query do
       Keyword.get(fields_index, index) + 2
     end
 
+    find_match_spec = list_to_tuple([name | :lists.duplicate(Enum.count(fields), {:_, [], __MODULE__})])
+
+    index_find_defs = Enum.map [{pkey, 2} | List.zip([indicies, index_positions])], fn({index_name, index}) ->
+      tuple_args = find_match_spec |> set_elem(index - 1, {index_name, [], __MODULE__}) |> tuple_to_list
+      argument = {:=, [], [{:spec, [], __MODULE__}, {:"{}", [], tuple_args}]}
+      {:def, [context: name],
+        [{:when, [],
+          [{:find, [], [argument]},
+           {:!==, [context: __MODULE__, import: Kernel], [{index_name, [], __MODULE__}, :_]}]},
+        [do: {{:., [], [:mnesia, :dirty_index_match_object]}, [], [{:spec, [], __MODULE__}, index]}]]}
+    end
+
+    find_def = {:def, [context: name],
+                 [{:find, [],
+                   [{:=, [], [{:spec, [], __MODULE__}, {:"{}", [], tuple_to_list(find_match_spec)}]}]},
+                   [do: {{:., [], [:mnesia, :dirty_match_object]}, [], [{:spec, [], __MODULE__}]}]]}
+
     quote location: :keep do
 
       def match_spec do
@@ -44,26 +61,11 @@ defmodule Eidetic.Query do
         end
       end
 
-      defp find_index_for(spec) do
-        Enum.reduce unquote(index_positions), nil, fn (pos, index) ->
-          if index === nil and elem(spec, pos - 1) !== :_ do
-            pos
-          else
-            index
-          end
-        end
+      Enum.map unquote(Macro.escape index_find_defs), fn(find_def) ->
+        Module.eval_quoted __ENV__, find_def
       end
 
-      def find(spec) do
-        case find_index_for(spec) do
-          nil -> :mnesia.dirty_match_object spec
-          pos -> :mnesia.dirty_index_match_object spec, pos
-        end
-      end
-
-      def find_by_index(spec, field) do
-        :mnesia.dirty_index_match_object spec, Keyword.get(unquote(fields_index), field) + 2
-      end
+      Module.eval_quoted __ENV__, unquote(find_def)
 
     end
   end
