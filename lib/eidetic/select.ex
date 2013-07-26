@@ -94,7 +94,7 @@ defmodule Eidetic.Select do
     prefix = :binary.part data, 0, size(data) - 1
     quote do
       {:andalso,
-        {:>, unquote(field), unquote(<< prefix :: binary, lastchar - 1 >>)},
+        {:>=, unquote(field), unquote(<< prefix :: binary, lastchar >>)},
         {:<, unquote(field), unquote(<< prefix :: binary, lastchar + 1 >>)}}
     end
   end
@@ -108,8 +108,8 @@ defmodule Eidetic.Select do
     end
     quote do
       {:andalso,
-        {:>, unquote(field), << (unquote(prefix)) :: binary, (unquote(lastchar) - 1) >>},
-        {:<, unquote(field), << (unquote(prefix)) :: binary, (unquote(lastchar) + 1) >>}}
+        {:>=, unquote(field), << unquote(prefix) :: binary, unquote(lastchar) >>},
+        {:<, unquote(field), << unquote(prefix) :: binary, unquote(lastchar) + 1 >>}}
     end
   end
 
