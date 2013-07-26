@@ -83,6 +83,10 @@ end
 User.select do
   hd(User.perms) == :editor
 end
+
+User.select do
+  startswith "some_prefix", User.name
+end
 ```
 
 look at `lib/eidetic/select.ex` for list of functions / operators available
