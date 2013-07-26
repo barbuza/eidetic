@@ -15,9 +15,9 @@ defmodule Eidetic.Select do
                :bsr, :>, :<, :>=, :==]
 
 
-  @select_op_sub {:"===", :"=="}
-  @select_op_sub {:"!=", :"=/="}
-  @select_op_sub {:"!==", :"=/="}
+  @select_op_sub {:===, :==}
+  @select_op_sub {:!=, :"=/="}
+  @select_op_sub {:!==, :"=/="}
   @select_op_sub {:<=, :"=<"}
   @select_op_sub {:and, :andalso}
   @select_op_sub {:or, :orelse}
@@ -38,12 +38,11 @@ defmodule Eidetic.Select do
         end
 
         Enum.each Enum.with_index(@record_fields), fn ({{field, _}, index}) ->
-          fun = quote location: :keep do
+          Module.eval_quoted(__ENV__, quote location: :keep do
             defmacro unquote(field)() do
               unquote(:"$#{index + 1}")
             end
-          end
-          Module.eval_quoted(__ENV__, fun, [], [])
+          end)
         end
 
     end
@@ -88,6 +87,30 @@ defmodule Eidetic.Select do
 
   defp transform({:__block__, _, exprs}, _) do
     Enum.map(exprs, transform(&1, true)) |> List.flatten
+  end
+
+  defp transform({:startswith, loc, [data, field]}, _) when is_list(loc) and is_atom(field) and is_binary(data) do
+    lastchar = :binary.last data
+    prefix = :binary.part data, 0, size(data) - 1
+    quote do
+      {:andalso,
+        {:>, unquote(field), unquote(<< prefix :: binary, lastchar - 1 >>)},
+        {:<, unquote(field), unquote(<< prefix :: binary, lastchar + 1 >>)}}
+    end
+  end
+
+  defp transform({:startswith, loc, [data, field]}, _) when is_list(loc) and is_atom(field) do
+    prefix = quote do
+      :binary.part unquote(data), 0, size(unquote(data)) - 1
+    end
+    lastchar = quote do
+      :binary.last unquote(data)
+    end
+    quote do
+      {:andalso,
+        {:>, unquote(field), << (unquote(prefix)) :: binary, (unquote(lastchar) - 1) >>},
+        {:<, unquote(field), << (unquote(prefix)) :: binary, (unquote(lastchar) + 1) >>}}
+    end
   end
 
   defp transform({name, loc, args}, toplevel) when is_list(loc) and is_list(args) and is_atom(name) do

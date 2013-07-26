@@ -131,6 +131,17 @@ defmodule EideticTest do
     end)
 
     res = User.select do
+      startswith "foo", User.email
+    end
+    assert Enum.count(res) == 250
+
+    no_mail = "some"
+    res = User.select do
+      startswith no_mail, User.email
+    end
+    assert Enum.count(res) == 0
+
+    res = User.select do
       User.id < 50
       User.email == "foo@gmail.com"
     end
