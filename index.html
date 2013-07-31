@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Eidetic by barbuza</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Eidetic</h1>
+        <p>alternate mnesia interface for elixir</p>
+
+        <p class="view"><a href="https://github.com/barbuza/eidetic">View the Project on GitHub <small>barbuza/eidetic</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/barbuza/eidetic/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/barbuza/eidetic/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/barbuza/eidetic">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a name="eidetic-a%C9%AA%CB%88d%C9%9Bt%C9%AAk-" class="anchor" href="#eidetic-a%C9%AA%CB%88d%C9%9Bt%C9%AAk-"><span class="octicon octicon-link"></span></a>Eidetic /aɪˈdɛtɪk/ <a href="https://travis-ci.org/barbuza/eidetic"><img src="https://travis-ci.org/barbuza/eidetic.png" alt="Build Status"></a>
+</h1>
+
+<p>alternate mnesia interface for <code>elixir</code></p>
+
+<h3>
+<a name="define" class="anchor" href="#define"><span class="octicon octicon-link"></span></a>define</h3>
+
+<div class="highlight"><pre><span class="k">defrecord</span> <span class="no">User</span><span class="p">,</span> <span class="p">[</span><span class="ss">id:</span> <span class="no">nil</span><span class="p">,</span> <span class="ss">name:</span> <span class="no">nil</span><span class="p">,</span> <span class="ss">email:</span> <span class="no">nil</span><span class="p">,</span> <span class="ss">is_admin:</span> <span class="no">false</span><span class="p">,</span> <span class="ss">perms:</span> <span class="p">[]]</span> <span class="k">do</span>
+<span class="k">  </span><span class="kn">use</span> <span class="no">Eidetic</span>
+
+  <span class="n">validate_with</span> <span class="ss">:perms</span><span class="p">,</span> <span class="n">function</span><span class="p">(</span><span class="n">is_list</span><span class="o">/</span><span class="m">1</span><span class="p">)</span>
+
+  <span class="nv">@index_on</span> <span class="ss">:is_admin</span>
+  <span class="nv">@storage</span> <span class="ss">:memory</span>
+
+  <span class="n">validate_with</span> <span class="ss">:id</span><span class="p">,</span> <span class="n">function</span><span class="p">(</span><span class="n">is_integer</span><span class="o">/</span><span class="m">1</span><span class="p">)</span>
+
+  <span class="n">validate</span> <span class="ss">:name</span> <span class="k">do</span>
+<span class="k">    </span><span class="n">non_empty_string</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+  <span class="k">end</span>
+
+  <span class="n">validate_presence_of</span> <span class="ss">:email</span>
+
+<span class="k">end</span>
+</pre></div>
+
+<p>valid storage types are <code>memory</code>, <code>disk</code> and <code>memory_and_disk</code></p>
+
+<p><code>validate</code> exposes value as field name</p>
+
+<p>currently, only <code>non_empty_string/1</code> is custom validator available</p>
+
+<p><code>validate_presence_of</code> will check if <code>value !== nil</code></p>
+
+<h3>
+<a name="create-schema" class="anchor" href="#create-schema"><span class="octicon octicon-link"></span></a>create schema</h3>
+
+<div class="highlight"><pre><span class="no">User</span><span class="o">.</span><span class="no">Meta</span><span class="o">.</span><span class="n">create!</span>
+</pre></div>
+
+<h3>
+<a name="create-records" class="anchor" href="#create-records"><span class="octicon octicon-link"></span></a>create records</h3>
+
+<div class="highlight"><pre><span class="no">User</span><span class="o">.</span><span class="n">new!</span> <span class="ss">id:</span> <span class="m">1</span><span class="p">,</span> <span class="ss">name:</span> <span class="s2">"foo"</span><span class="p">,</span> <span class="ss">email:</span> <span class="s2">"foo@gmail.com"</span>
+<span class="no">User</span><span class="p">[</span><span class="ss">id:</span> <span class="m">2</span><span class="p">,</span> <span class="ss">name:</span> <span class="s2">"spam"</span><span class="p">,</span> <span class="ss">email:</span> <span class="s2">"spam@me.com"</span><span class="p">,</span> <span class="ss">is_admin:</span> <span class="no">true</span><span class="p">]</span><span class="o">.</span><span class="n">create!</span>
+</pre></div>
+
+<p><code>create!</code> and <code>new!</code> will check if no other records stored with given pkey value</p>
+
+<h3>
+<a name="make-queries" class="anchor" href="#make-queries"><span class="octicon octicon-link"></span></a>make queries</h3>
+
+<div class="highlight"><pre><span class="no">User</span><span class="o">.</span><span class="n">get</span> <span class="m">1</span>
+<span class="no">User</span><span class="o">.</span><span class="n">find</span> <span class="no">User</span><span class="o">.</span><span class="n">match_spec</span><span class="o">.</span><span class="n">is_admin</span><span class="p">(</span><span class="no">true</span><span class="p">)</span>
+</pre></div>
+
+<p>eidetic will try to utilize first specified index in match spec</p>
+
+<h3>
+<a name="alter-data" class="anchor" href="#alter-data"><span class="octicon octicon-link"></span></a>alter data</h3>
+
+<div class="highlight"><pre><span class="no">User</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="m">1</span><span class="p">)</span><span class="o">.</span><span class="n">email</span><span class="p">(</span><span class="s2">"some_new_email@host.com"</span><span class="p">)</span><span class="o">.</span><span class="n">save!</span>
+<span class="no">User</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="m">1</span><span class="p">)</span><span class="o">.</span><span class="n">change_id!</span><span class="p">(</span><span class="m">2</span><span class="p">)</span>
+<span class="no">User</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="m">2</span><span class="p">)</span><span class="o">.</span><span class="n">delete!</span>
+</pre></div>
+
+<p><code>change_#{pkey}!</code> will check if no record is stored for a pk given value, it will also validate new given value</p>
+
+<p><code>save!</code> will just invoke <code>:mnesia.write</code> with no uniq checks</p>
+
+<h3>
+<a name="use-mnesiaselect-with-no-pain-in-the-ass" class="anchor" href="#use-mnesiaselect-with-no-pain-in-the-ass"><span class="octicon octicon-link"></span></a>use <code>:mnesia.select</code> with no pain in the ass</h3>
+
+<div class="highlight"><pre><span class="kn">require</span> <span class="no">User</span>
+
+<span class="no">User</span><span class="o">.</span><span class="n">select</span> <span class="k">do</span>
+<span class="k">  </span><span class="p">(</span><span class="no">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="m">10</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="no">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="m">20</span><span class="p">)</span>
+<span class="k">end</span>
+
+<span class="no">User</span><span class="o">.</span><span class="n">select</span> <span class="no">User</span><span class="o">.</span><span class="n">id</span> <span class="k">do</span>
+<span class="k">  </span><span class="no">User</span><span class="o">.</span><span class="n">is_admin</span> <span class="o">==</span> <span class="no">true</span>
+  <span class="no">User</span><span class="o">.</span><span class="n">id</span> <span class="o">&lt;</span> <span class="m">1000</span>
+<span class="k">end</span>
+
+<span class="no">User</span><span class="o">.</span><span class="n">select</span> <span class="k">do</span>
+<span class="k">  </span><span class="n">hd</span><span class="p">(</span><span class="no">User</span><span class="o">.</span><span class="n">perms</span><span class="p">)</span> <span class="o">==</span> <span class="ss">:editor</span>
+<span class="k">end</span>
+
+<span class="no">User</span><span class="o">.</span><span class="n">select</span> <span class="k">do</span>
+<span class="k">  </span><span class="n">startswith</span> <span class="s2">"some_prefix"</span><span class="p">,</span> <span class="no">User</span><span class="o">.</span><span class="n">name</span>
+<span class="k">end</span>
+</pre></div>
+
+<p>look at <code>lib/eidetic/select.ex</code> for list of functions / operators available</p>
+
+<p><code>select</code> will try to use <code>find</code> if possible (if there are only equality checks)</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/barbuza">barbuza</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
